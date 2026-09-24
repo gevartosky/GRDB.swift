@@ -38,10 +38,12 @@ if ProcessInfo.processInfo.environment["SPI_BUILDER"] == "1" {
     dependencies.append(.package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0"))
 }
 
+// GRDB+SQLCipher, Android only. Apple platforms keep using the system SQLite
+// (the GRDBSQLite system library target).
 dependencies.append(.package(url: "https://github.com/skiptools/swift-sqlcipher.git", from: "1.3.0"))
-cSettings.append(.define("SQLITE_HAS_CODEC"))
-swiftSettings.append(.define("SQLITE_HAS_CODEC"))
-swiftSettings.append(.define("SQLCipher"))
+cSettings.append(.define("SQLITE_HAS_CODEC", .when(platforms: [.android])))
+swiftSettings.append(.define("SQLITE_HAS_CODEC", .when(platforms: [.android])))
+swiftSettings.append(.define("SQLCipher", .when(platforms: [.android])))
 
 let package = Package(
     name: "GRDB",
@@ -59,7 +61,7 @@ let package = Package(
     ],
     traits: [
         .trait(name: "GRDBCIPHER", description: "Use the SQLCipher library rather than the vendored SQLite"),
-        .default(enabledTraits: ["GRDBCIPHER"])
+        .default(enabledTraits: [])
     ],
     dependencies: dependencies,
     targets: [
@@ -69,7 +71,10 @@ let package = Package(
         .target(
             name: "GRDB",
             dependencies: [
-                .product(name: "SQLCipher", package: "swift-sqlcipher"),
+                .target(name: "GRDBSQLite", condition: .when(platforms: [.iOS, .macOS, .macCatalyst, .tvOS, .visionOS, .watchOS, .linux])),
+                // swift-sqlcipher ships the variadic sqlite3 wrappers GRDB needs
+                // in its own grdb.h, so no extra shim target is required.
+                .product(name: "SQLCipher", package: "swift-sqlcipher", condition: .when(platforms: [.android])),
             ],
             path: "GRDB",
             resources: [.copy("PrivacyInfo.xcprivacy")],
